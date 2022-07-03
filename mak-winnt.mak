@@ -80,6 +80,27 @@ $(PERL) -e $(OSQUOTE) \
 	$(OSQUOTE)
 endef
 
+define PSED_I
+$(PERL) -e $(OSQUOTE) \
+	exit psed_i_sub ( @ARGV ); \
+	$(PSED_SUBS) \
+	$(OSQUOTE)
+endef
+
+define PSED
+$(PERL) -e $(OSQUOTE) \
+	exit psed_sub ( @ARGV ); \
+	$(PSED_SUBS) \
+	$(OSQUOTE)
+endef
+
+define PSEDFILES2DIR
+$(PERL) -e $(OSQUOTE) \
+	exit psedfiles2dir_sub ( @ARGV ); \
+	$(PSED_SUBS) \
+	$(OSQUOTE)
+endef
+
 COV_CFLAGS 	=
 COV_LFLAGS 	=
 COV_INIT   	=

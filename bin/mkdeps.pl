@@ -117,7 +117,10 @@ sub source_scan
                     my $leaf = ($source_dir eq ".") ? basename(cwd()) : basename($source_dir);
                     $output .= $source_dir."/".$output_dir."/".$file." ";
 
-                    if (-f "$source_dir/$src.c") {
+                    my $ext = 'c';
+                    $ext = 'cpp' if ! -f "$source_dir/$src.$ext";
+                    $ext = undef if ! -f "$source_dir/$src.$ext";
+                    if (defined $ext) {
                         my $tmp_target = "$source_dir/$output_dir/%-proto.h";
                         my $tmp_mak_macro = uc ( $tmp_target );
                            $tmp_mak_macro =~ s~\.~_DOT_~gs;
@@ -126,9 +129,9 @@ sub source_scan
                         $output_proto_rules->{$file} =
                              "ifndef $tmp_mak_macro\n"
                             ."$tmp_mak_macro := 1\n"
-                            ."$tmp_target: $source_dir/%.c\n"
+                            ."$tmp_target: $source_dir/%.$ext\n"
                             ."\t\@\$(MAKE_PERL_ECHO) \"make[\$(MAKELEVEL)]: building: \$\@\"\n"
-                            ."\t\$(MAKE_RUN) cd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -o $output_dir \$(notdir \$*.c)\n"
+                            ."\t\$(MAKE_RUN) cd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -o $output_dir \$(notdir \$*.$ext)\n"
                             ."endif\n\n";
                     }
                     elsif ($src eq $leaf) {
@@ -140,7 +143,7 @@ sub source_scan
                         $output_proto_rules->{$file} =
                              "ifndef $tmp_mak_macro\n"
                             ."$tmp_mak_macro := 1\n"
-                            ."$tmp_target: \$(wildcard $source_dir/*.h) \$(wildcard $source_dir/*.c)\n"
+                            ."$tmp_target: \$(wildcard $source_dir/*.h) \$(wildcard $source_dir/*.c) \$(wildcard $source_dir/*.cpp)\n"
                             ."\t\@\$(MAKE_PERL_ECHO) \"make[\$(MAKELEVEL)]: building: \$\@\"\n"
                             ."\t\$(MAKE_RUN) cd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -d -o $output_dir\n"
                             ."endif\n\n";
@@ -202,7 +205,7 @@ EOL
 
 $ARGV[0] or usage("error: no file specified");
 my $source_file_stripped = $ARGV[0];
-$source_file_stripped =~ s~\.c~~;
+$source_file_stripped =~ s~\.(c|cpp)~~;
 
 if (!-e $ARGV[0]) {
     if (-e $os_src_dir."/".$ARGV[0]) {

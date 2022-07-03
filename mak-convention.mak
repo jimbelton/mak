@@ -59,6 +59,7 @@ endef
 
 NON-THIRD-PARTY-FILES := $(shell $(MAKE_PERL_LIST_NON_THIRD_PARTY_FILES))
 
+
 #
 # - Example usage:
 #	- @$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(no_plan|skip_all))" exit1 $(FILES)
@@ -119,110 +120,177 @@ $(PERL) -e $(OSQUOTE) \
 endef
 
 .PHONY : \
-	convention_no_debug_instrumentation_with_goto_out_block \
 	convention_no_instrumentation_or_goto_in_lock \
-	convention_uppercase_hash_define_and_typedef \
 	convention_exit_preceded_by_entry \
 	convention_entry_followed_by_exit \
 	convention_no_sprintf_in_c_files \
+	convention_no_basename_in_c_files \
+	convention_uppercase_hash_define \
+	convention_no_double_semi_colons \
+	convention_convention_exclusion \
+	convention_entry_return_exit \
 	convention_no_eol_whitespace \
 	convention_no_indented_label \
+	convention_uppercase_typedef \
 	convention_uppercase_label \
 	convention_no_hash_if_0 \
-	convention_convention_exclusion \
+	convention_linefeeds \
+	convention_cuddled_sizeof \
+	convention_cuddled_asterisk \
+	convention_no_explicit_true_false_tests \
 	convention_no_fixme \
 	convention_no_tab \
 	convention_usage \
 	convention
 
 convention_usage :
-	@echo usage: make convention_no_debug_instrumentation_with_goto_out_block
 	@echo usage: make convention_no_instrumentation_or_goto_in_lock
-	@echo usage: make convention_uppercase_hash_define_and_typedef
 	@echo usage: make convention_exit_preceded_by_entry
 	@echo usage: make convention_entry_followed_by_exit
 	@echo usage: make convention_no_sprintf_in_c_files
+	@echo usage: make convention_no_basename_in_c_files
+	@echo usage: make convention_uppercase_hash_define
 	@echo usage: make convention_convention_exclusion
+	@echo usage: make convention_no_double_semi_colons
+	@echo usage: make convention_entry_return_exit
 	@echo usage: make convention_no_eol_whitespace
 	@echo usage: make convention_no_indented_label
+	@echo usage: make convention_uppercase_typedef
 	@echo usage: make convention_uppercase_label
 	@echo usage: make convention_no_hash_if_0
+	@echo usage: make convention_linefeeds
+	@echo usage: make convention_cuddled_sizeof
+	@echo usage: make convention_cuddled_asterisk
 	@echo usage: make convention_no_fixme
 	@echo usage: make convention_no_tab
+	@echo usage: make convention_no_explicit_true_false_tests
 	@echo usage: make convention_to_do
 	@echo usage: make convention
 
 #	convention_to_do			- doesn't exit1
 
 # NOTE: convention_no_fixme is the last check so that code containing 'fixme' may be checked for convention failures before it is ready to commit.
+ifeq ($(filter remote,$(MAKECMDGOALS)),)
 convention : \
-	convention_no_debug_instrumentation_with_goto_out_block \
 	convention_no_instrumentation_or_goto_in_lock \
-	convention_uppercase_hash_define_and_typedef \
 	convention_exit_preceded_by_entry \
 	convention_entry_followed_by_exit \
 	convention_no_sprintf_in_c_files \
+	convention_no_basename_in_c_files \
+	convention_uppercase_hash_define \
+	convention_no_double_semi_colons \
+	convention_entry_return_exit \
 	convention_no_eol_whitespace \
 	convention_no_indented_label \
+	convention_uppercase_typedef \
 	convention_uppercase_label \
 	convention_no_hash_if_0 \
+	convention_linefeeds \
 	convention_no_tab \
+	convention_cuddled_sizeof \
+	convention_cuddled_asterisk \
+	convention_no_explicit_true_false_tests \
 	convention_no_fixme \
 	convention_convention_exclusion
 	@echo make: all convention checks passed!
-
-convention_no_debug_instrumentation_with_goto_out_block:
-	@$(MAKE_PERL_ECHO) "make: checking convention that .c files should avoid block with debug log and goto OUT"
-	@$(MAKE_PERL_ECHO) "hint: consider indenting goto OUT in its own block if you are really sure!"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:(\{[^\{\}]+?goto\s+OUT[^\{\}]+\}))" present "(?m-ix:(SXEL6))" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_no_sprintf_in_c_files:
-	@$(MAKE_PERL_ECHO) "make: checking convention that .c files should avoid sprintf"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:([^a-z_]sprintf))" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_ECHO) "make: checking convention that .h, .c and .cpp files should avoid sprintf"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:([^a-z_]sprintf[^_][^s]))" exit1 $(NON-THIRD-PARTY-FILES)
+
+ifndef MAKE_ALLOW_BASENAME
+convention_no_basename_in_c_files:
+	@$(MAKE_PERL_ECHO) "make: checking convention for basename(3)"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?im-x:[^a-z_-]basename[^_-][^s])" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_entry_followed_by_exit:
 	@$(MAKE_PERL_ECHO) "make: checking convention that SXEE?? macro followed by SXER?? macro"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:SXEE[0-9][0-9](.+?)SXER[0-9][0-9])" present "(?m-ix:SXE[ER][0-9][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp)$$" "(?s-xim:SXEE[0-9](.+?)SXER[0-9])" present "(?m-ix:SXE[ER][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
 
 convention_exit_preceded_by_entry:
 	@$(MAKE_PERL_ECHO) "make: checking convention that SXER?? macro preceded by SXEE?? macro"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:(.+?)\s+SXER[0-9][0-9])" missing "(?mx-i:SXE[E][0-9][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp)$$" "(?s-xim:(.+?)\s+SXER[0-9])" missing "(?mx-i:SXE[E][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
 
+convention_entry_return_exit:
+	@$(MAKE_PERL_ECHO) "make: checking convention that SXEE?? macro followed by SXER?? macro does not surround a return"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp)$$" "(?s-xim:SXEE[0-9](.+?)SXER[0-9])" present "(?m-ix:[\:\;]\s*\breturn\b[^\;]*;)" exit1 $(NON-THIRD-PARTY-FILES)
+
+ifndef MAKE_ALLOW_INDENTED_LABELS
 convention_no_indented_label:
 	@$(MAKE_PERL_ECHO) "make: checking convention for no indented labels"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ][ \t]+[A-Z0-9_]+:)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ][ \t]+[A-Z0-9_]+:[^:])" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_uppercase_label:
 	@$(MAKE_PERL_ECHO) "make: checking convention for incorrect case for label"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ]+[a-z0-9_]+:)(?=default:)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ]*(?!default:)[a-z0-9_]+:[^:])" exit1 $(NON-THIRD-PARTY-FILES)
 
-convention_uppercase_hash_define_and_typedef:
-	@$(MAKE_PERL_ECHO) "make: checking convention for incorrect case for hash define or typedef"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(#[ ]*define|typedef[ ]+(struct|enum))[ ]+[a-z][a-z0-9_]+)" exit1 $(NON-THIRD-PARTY-FILES)
+ifndef MAKE_ALLOW_LOWERCASE_HASH_DEFINE
+convention_uppercase_hash_define:
+	@$(MAKE_PERL_ECHO) "make: checking convention for incorrect case for hash define"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(#[ ]*define)[ ]+[a-z][a-z0-9_]+)" exit1 $(NON-THIRD-PARTY-FILES)
+endif
+
+ifndef MAKE_ALLOW_LOWERCASE_TYPEDEF
+convention_uppercase_typedef:
+	@$(MAKE_PERL_ECHO) "make: checking convention for incorrect case for typedef"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(typedef[ ]+(struct|enum))[ ]+[a-z][a-z0-9_]+)" exit1 $(NON-THIRD-PARTY-FILES)
+endif
+
+convention_cuddled_sizeof:
+	@$(MAKE_PERL_ECHO) "make: checking convention for sizeof cuddling"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:sizeof[ ]+\()" exit1 $(NON-THIRD-PARTY-FILES)
+
+ifndef MAKE_ALLOW_SPACE_AFTER_ASTERISK
+convention_cuddled_asterisk:
+	@$(MAKE_PERL_ECHO) "make: checking convention for asterisk cuddling in pointer declarations"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:\b(struct \w+|\w+_t|char|short|int|unsigned|long|float|double|void|bool)(?:\*|\s+\*\s+\w))" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_no_fixme:
 	@$(MAKE_PERL_ECHO) "make: checking convention for fixme"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?im-x:fixme)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?im-x:fixme)" exit1 $(NON-THIRD-PARTY-FILES)
 
 convention_no_hash_if_0:
 	@$(MAKE_PERL_ECHO) "make: checking convention for hash if 0"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ]+#[ ]*if[ ]+0)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ]+#[ ]*if[ ]+0)" exit1 $(NON-THIRD-PARTY-FILES)
 
+convention_linefeeds:
+	@echo looking at $(notdir ${CURDIR})
+	@$(MAKE_PERL_ECHO) "make: checking convention for linefeeds"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:\s*(?!#|{|\*\s|\s)(?!static\s+inline|inline)(?!.*//|.*/\*|.*\").*[^=\s]\s*{\s*[a-zA-Z0-9;+-])" exit1 $(RESOLVER-NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:\s*(?!.*//|.*/\*|.*\")(for|if)\s*(\((?:[^()]++|(?-1))*+\))\s*[a-zA-Z0-9;+-])" exit1 $(RESOLVER-NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:\s*(?!#|\*\s|\s)(?!.*//|.*/\*|.*\"|.*for[\s\(]).*;\s*[a-zA-Z0-9;+-])" exit1 $(RESOLVER-NON-THIRD-PARTY-FILES)
+
+ifndef MAKE_ALLOW_TABS
 convention_no_tab:
 	@$(MAKE_PERL_ECHO) "make: checking convention for tabs"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:[\x09]+)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:[\x09]+)" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_no_eol_whitespace:
 	@$(MAKE_PERL_ECHO) "make: checking convention for end-of-line whitespace"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ]+[^ ].+[ ]+$$)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ]+[^ ].+[ ]+$$)" exit1 $(NON-THIRD-PARTY-FILES)
+
+convention_no_double_semi_colons:
+	@$(MAKE_PERL_ECHO) "make: checking convention for double semi colons"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h|pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:;;$$)" exit1 $(NON-THIRD-PARTY-FILES)
 
 convention_no_instrumentation_or_goto_in_lock:
 	@$(MAKE_PERL_ECHO) "make: checking convention for use of log instrumentation or goto while locking"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:SXE_OEM_MACRO_SPINLOCK(?:_QUIET_|_)LOCK(.+?)SXE_OEM_MACRO_SPINLOCK(?:_QUIET_|_)UNLOCK)" present "(?m-ix:(SXE[ELRA][0-9][0-9]|goto))" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp)$$" "(?s-xim:SXE_OEM_MACRO_SPINLOCK(?:_QUIET_|_)LOCK(.+?)SXE_OEM_MACRO_SPINLOCK(?:_QUIET_|_)UNLOCK)" present "(?m-ix:(SXE[ELRA][0-9][0-9]|goto))" exit1 $(NON-THIRD-PARTY-FILES)
+
+ifndef MAKE_ALLOW_EXPLICIT_TRUE_FALSE_TESTS
+convention_no_explicit_true_false_tests:
+	@$(MAKE_PERL_ECHO) "make: checking convention for no explicit true/false tests"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?im-x:(\b|\s)[!=]=\s*(true|false)\b)" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_to_do:
 	@$(MAKE_PERL_ECHO) "make: checking convention for [t]odo"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.*$$" "(?s-xim:^(.*)$$)" present "(?im-x:[t]odo)" exit0 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.*$$" "(?s-xim:^(.*)$$)" present "(?im-x:\b[t]odo)" exit0 $(NON-THIRD-PARTY-FILES)
 
 convention_convention_exclusion:
 	@$(MAKE_PERL_ECHO) "make: finding convention exclusions"

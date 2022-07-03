@@ -91,7 +91,7 @@ else ifneq ($(filter coverage,$(MAKECMDGOALS)),)
     COVERAGE_CFLAGS := $(COV_CFLAGS)
     COVERAGE_INIT   := $(COV_INIT)
     COVERAGE_REAP   := $(COV_REAP)
-    COVERAGE_CHECK  := $(MAKE_PERL_COVERAGE_CHECK) $(DST.dir)/*.c.gcov
+    COVERAGE_CHECK  := $(MAKE_PERL_COVERAGE_CHECK) $(DST.dir)/*.c*.gcov
 else
 #del $(error make: error: need to specify one of the following: release, debug, or coverage)
 endif
@@ -147,7 +147,7 @@ $(PERL) -e $(OSQUOTE) \
 			next; \
 		} \
 		$$g =~ s~^(.*)/$(DST.dir)/(.*)\.gcov$$~$$1/$$2~; \
-		$$f =~ s~^[^\#:]+:.*$$~~gm; \
+		$$f =~ s~^[^\#:*]+\*?:.*$$~~gm; \
 		$$f =~ s~^\n+~~s; \
 		foreach ( split(m~\n{2,}~s,$$f) ) { \
 			$$c = sprintf q{%s:%d}, $$g, m~:\s*(\d+)~; \

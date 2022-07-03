@@ -585,7 +585,7 @@ ifneq (\$(filter $module,\$(COVERAGE_OPTOUT_LIST)),)
 \t\@\$(MAKE_PERL_ECHO) "make: building: coverage  : ignored for module $module"
 else
 \t\@\$(MAKE_PERL_ECHO) "make: building: coverage  : reap"
-\t\@cp -p -f \$(TOP.dir)/$parcel/$module/*.c \$(MAKE.dir)/\$(DST.dir)/$parcel/$module/. ; cd \$(MAKE.dir)/\$(DST.dir)/$parcel ; gcov ../$parcel/$module/*.c --object-directory ../$parcel/$module > /dev/null 2>&1 && cp -p -f *.c.gcov $module/. ; rm -f *.c.gcov
+\t\@cp -p -f \$(TOP.dir)/$parcel/$module/*.c \$(MAKE.dir)/\$(DST.dir)/$parcel/$module/. ; cd \$(MAKE.dir)/\$(DST.dir)/$parcel ; \$(COV) ../$parcel/$module/*.c --object-directory ../$parcel/$module > /dev/null 2>&1 && cp -p -f *.c.gcov $module/. ; rm -f *.c.gcov
 \t\@\$(MAKE_PERL_ECHO) "make: building: coverage  : check"
 \t\@\$(MAKE_PERL_COVERAGE_CHECK) \$(MAKE.dir)/\$(DST.dir)/$parcel/$module/*.c.gcov
 \t\@\$(MAKE_PERL_ECHO) "make: building: coverage  : acceptable for module $module"

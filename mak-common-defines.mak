@@ -136,7 +136,7 @@ $(PERL) -e $(OSQUOTE) \
 			system($$dll_cmd) == 0 or die(qq[MAKE_PERL_LIB: Cannot explode shared library $$_\n]); \
 		} \
 	} \
-	my $$dll_cmd = qq[$(CC) -fPIC -shared -o] . join(q[ ], @ARGV) . qq[ ] . join(q[ ],glob(qq[$$tmp_dll_dir/*$(EXT.obj)])); \
+	my $$dll_cmd = qq[$(CC) -fPIC -shared -Wl,-soname,] . $$ARGV[0] . qq[ -o ] . join(q[ ], @ARGV[1..$$#ARGV]) . qq[ ] . join(q[ ],glob(qq[$$tmp_dll_dir/*$(EXT.obj)])); \
 	printf qq[MAKE_PERL_LIB: debug: creating shared library: $(OSPC)s\n], $$dll_cmd if ( $(MAKE_DEBUG) ); \
 	system($$dll_cmd) == 0 or die(qq[MAKE_PERL_LIB: Archive command failed: $$dll_cmd]); \
 	if (-d $$tmp_dll_dir) { \
@@ -166,55 +166,95 @@ define COPYFILES2DIR_SUB
 	}
 endef
 
+define PSED_SUBS
+	use File::Copy; \
+	sub psed_sub { \
+		$$sed_cmd = pop @_; \
+		$$dst = pop @_; \
+		$$src = pop @_; \
+		die qq[cp: cannot stat `$$src`: No such file or directory] if ( not -e $$src ); \
+		my ( $$pat, $$sub, $$opt ) = $$sed_cmd =~ m~s/([^/]+)/([^/]*)/([a-z]*)~; \
+		$$opt =~ m/^[gmsixpodualngcer]+$$/ or die(qq[MAKE_PERL_REGEX: Unknown pattern option: `$$opt`]); \
+		open( $$ifh, "<", $$src); \
+		open( $$ofh, ">", $$dst ); \
+		printf qq[`$(OSPC)s` -> `$(OSPC)s/` -e s/`$(OSPC)s`/`$(OSPC)s`/`$(OSPC)s`\n], $$src, $$dst, $$pat, $$sub, $$opt; \
+		while ( <$$ifh> ) { \
+			( $$opt =~ /g/ ) ? s/(?$$opt)$$pat/$$sub/g : s/(?$$opt)$$pat/$$sub/; \
+			print $$ofh $$_; \
+		} \
+		close( $$ifh ); \
+		close( $$ofh ); \
+		return 0; \
+	} \
+	sub psed_i_sub { \
+		$$sed_cmd = pop @_; \
+		foreach $$src ( @_ ) { \
+			$$tmp = $$src . ".tmp"; \
+			psed_sub( $$src, $$tmp, $$sed_cmd ); \
+			File::Copy::move ( $$tmp, $$src ) || die qq[$$!]; \
+		} \
+	} \
+	sub psedfiles2dir_sub { \
+		$$sed_cmd = pop @_; \
+		$$dst_folder = pop @_; \
+		foreach $$src ( @_ ) { \
+			( $$file ) = $$src =~ m~([^\/]+)$$~; \
+			$$dst = $$dst_folder . qw[/] . $$file; \
+			psed_sub($$src, $$dst, $$sed_cmd); \
+		} \
+		return 0; \
+	}
+endef
+
 define MAKE_PERL_COVERAGE_CHECK
 $(PERL) -e $(OSQUOTE) \
 	( $$dst_dir, $$os_class ) = @ARGV; \
-	$$sub_libs = qq[../$(LIBRARIES) ../$(DLLIBRARIES)]; \
+	$$sub_libs = qq[../$(filter-out $(COVERAGE_OPTOUT_LIST),$(LIBRARIES:%=lib-%)) ../$(DLLIBRARIES)]; \
 	if ( -e q[$(COM.dir)/test] ) { \
 		if ( q[$(COM.dir)] eq q[..] ) { \
-			printf qq[make[$(MAKELEVEL)]: coverage: NOTE: top level $(COM.dir)/test/ folder exists; delaying final coverage check for @sub_libs\n]; \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: NOTE: top level $(COM.dir)/test/ folder exists; delaying final coverage check for @sub_libs\n]; \
 			exit 0; \
 		} \
 		$$sub_libs = qq[$(filter-out $(COVERAGE_OPTOUT_LIST), $(EXECUTABLES:%=exe-%) $(ALL_LIBRARIES:%=lib-%))]; \
 	} \
 	@sub_libs = split ( m~\s+~, $$sub_libs ); \
-	printf qq[make[$(MAKELEVEL)]: coverage: checking coverage in subdirectories: @sub_libs\n] if ( $(MAKE_DEBUG) ); \
+	printf qq[checkcov[$(MAKELEVEL)]: coverage: checking coverage in subdirectories: @sub_libs\n] if ( $(MAKE_DEBUG) ); \
 	undef @x; \
 	foreach $$sub_lib ( sort @sub_libs ) { \
 		$$sub_lib =~ s~\b([^ ]+)~lib-$$1~ if ( ! -e $$sub_lib ); \
-		printf qq[make[$(MAKELEVEL)]: coverage: checking coverage in subdirectory: $(OSPC)s\n], $$sub_lib if ( $(MAKE_DEBUG) ); \
-		printf qq[make[$(MAKELEVEL)]: coverage: exists? $$sub_lib/$$os_class/\n] if ( $(MAKE_DEBUG) ); \
+		printf qq[checkcov[$(MAKELEVEL)]: coverage: checking coverage in subdirectory: $(OSPC)s\n], $$sub_lib if ( $(MAKE_DEBUG) ); \
+		printf qq[checkcov[$(MAKELEVEL)]: coverage: exists? $$sub_lib/$$os_class/\n] if ( $(MAKE_DEBUG) ); \
 		undef $$gcov_output; \
 		if ( -d qq[$$sub_lib/$$os_class] ) { \
-			printf qq[make[$(MAKELEVEL)]: coverage: creating $(OSPC)s/$(OSPC)s/$(OSPC)s/\n], $$sub_lib, $$dst_dir, $$os_class if ( $(MAKE_DEBUG) ); \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: creating $(OSPC)s/$(OSPC)s/$(OSPC)s/\n], $$sub_lib, $$dst_dir, $$os_class if ( $(MAKE_DEBUG) ); \
 			mkdir qq[$$sub_lib/$$dst_dir/$$os_class]; \
 			@os_class_c_to_copy = glob ( qq[$$sub_lib/$$os_class/*.c $$sub_lib/$$os_class/*.cpp] ); \
-			printf qq[make[$(MAKELEVEL)]: coverage: updating: @os_class_c_to_copy\n] if ( $(MAKE_DEBUG) ); \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: updating: @os_class_c_to_copy\n] if ( $(MAKE_DEBUG) ); \
 			copyfiles2dir_sub ( @os_class_c_to_copy, qq[$$sub_lib/$$dst_dir/$$os_class] ); \
 			my @files = map { m{\Q$$sub_lib/$$dst_dir\E/(.+)}; $$1 } <$$sub_lib/$$dst_dir/$$os_class/*.c $$sub_lib/$$dst_dir/$$os_class/*.cpp>; \
 			$$gcov_cmd = qq[cd $$sub_lib/$$dst_dir && $(COV) @files 2>&1]; \
-			printf qq[make[$(MAKELEVEL)]: coverage: running gcov; $(OSPC)s\n], $$gcov_cmd if ( $(MAKE_DEBUG) ); \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: running gcov; $(OSPC)s\n], $$gcov_cmd if ( $(MAKE_DEBUG) ); \
 			$$gcov_output = `$$gcov_cmd`; \
 		} \
 		@c_to_copy = glob ( qq[$$sub_lib/*.c $$sub_lib/*.cpp] ); \
 		if ( 0 == scalar @c_to_copy ) { \
-			printf qq[make[$(MAKELEVEL)]: coverage: found no source files; skipping subdirectory $: $(OSPC)s\n], $$sub_lib; \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: found no source files; skipping subdirectory $: $(OSPC)s\n], $$sub_lib; \
 			next; \
 		} \
-		printf qq[make[$(MAKELEVEL)]: coverage: updating: @c_to_copy\n] if ( $(MAKE_DEBUG) ); \
+		printf qq[checkcov[$(MAKELEVEL)]: coverage: updating: @c_to_copy\n] if ( $(MAKE_DEBUG) ); \
 		copyfiles2dir_sub ( @c_to_copy, qq[$$sub_lib/$$dst_dir] ); \
 		unlink ( qq[$$sub_lib/$$dst_dir/gcov-stdout.log] ); \
 		unlink ( qq[$$sub_lib/$$dst_dir/gcov-stderr.log] ); \
 		my @files = map { m{.*/(.+)}; $$1 } <$$sub_lib/$$dst_dir/*.c $$sub_lib/$$dst_dir/*.cpp>; \
 		for my $$file (@files) { \
 		    $$gcov_cmd = qq[cd $$sub_lib/$$dst_dir && $(COV) $$file >>gcov-stdout.log 2>>gcov-stderr.log]; \
-		    printf qq[make[$(MAKELEVEL)]: coverage: running gcov; $(OSPC)s\n], $$gcov_cmd if ( $(MAKE_DEBUG) ); \
+		    printf qq[checkcov[$(MAKELEVEL)]: coverage: running gcov; $(OSPC)s\n], $$gcov_cmd if ( $(MAKE_DEBUG) ); \
 		    `$$gcov_cmd`; \
 		} \
-		open ( IN, q[<], qq[$$sub_lib/$$dst_dir/gcov-stdout.log] ) || die qq[make[$(MAKELEVEL)]: coverage: ERROR: cannot open file: gcov-stdout.log]; \
+		open ( IN, q[<], qq[$$sub_lib/$$dst_dir/gcov-stdout.log] ) || die qq[checkcov[$(MAKELEVEL)]: coverage: ERROR: cannot open file: gcov-stdout.log]; \
 		sysread ( IN, $$tmp_stdout, 9_999_999 ); \
 		close ( IN ) ; \
-		open ( IN, q[<], qq[$$sub_lib/$$dst_dir/gcov-stderr.log] ) || die qq[make[$(MAKELEVEL)]: coverage: ERROR: cannot open file: gcov-stderr.log]; \
+		open ( IN, q[<], qq[$$sub_lib/$$dst_dir/gcov-stderr.log] ) || die qq[checkcov[$(MAKELEVEL)]: coverage: ERROR: cannot open file: gcov-stderr.log]; \
 		sysread ( IN, $$tmp_stderr, 9_999_999 ); \
 		close ( IN ) ; \
 		$$gcov_output  =  $$tmp_stdout . $$tmp_stderr; \
@@ -238,25 +278,25 @@ $(PERL) -e $(OSQUOTE) \
 		$$gcov_output  =~ s~../lib-boost/[^\r\n]+:cannot open source file[\r\n]+~~gs; \
 		while ( $$gcov_output =~ m~([^\s]+)\.gcda\:cannot open data file[\r\n]+~gs ) { \
 			my @fn = <$$1.c $$1.cpp>; \
-			printf qq[make[$(MAKELEVEL)]: coverage: WARNING: no coverage for file: @fn\n]; \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: WARNING: no coverage for file: @fn\n]; \
 		} \
 		$$gcov_output =~ s~[^\s]+\:cannot open data file[\r\n]+~~gs; \
 		if ( $$gcov_output !~ m~^\s*$$~s ) { \
-			printf qq[make[$(MAKELEVEL)]: coverage: WARNING: unexpected output found in lines:\n$(OSPC)s\n], $$gcov_output2; \
-			die(  qq[make[$(MAKELEVEL)]: coverage: FATAL: unexpected gcov line(s) (in above):\n$$gcov_output\n]); \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: WARNING: unexpected output found in lines:\n$(OSPC)s\n], $$gcov_output2; \
+			die(  qq[checkcov[$(MAKELEVEL)]: coverage: FATAL: unexpected gcov line(s) (in above):\n$$gcov_output\n]); \
 		} \
-		printf qq[make[$(MAKELEVEL)]: coverage: showing exclusions\n] if ( $(MAKE_DEBUG) ); \
+		printf qq[checkcov[$(MAKELEVEL)]: coverage: showing exclusions\n] if ( $(MAKE_DEBUG) ); \
 		@g = glob ( qq[$$sub_lib/$$dst_dir/*.c.gcov $$sub_lib/$$dst_dir/*.cpp.gcov] ); \
 		if ( 0 == scalar @g ) { \
-			printf qq[make[$(MAKELEVEL)]: coverage: WARNING: no *.gcov files found in $$sub_lib\n]; \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: WARNING: no *.gcov files found in $$sub_lib\n]; \
 			next if ($$sub_lib !~ m~lib-~); \
 			@f = glob ( qq[$$sub_lib/$$dst_dir/*.c $$sub_lib/$$dst_dir/*.cpp] ); \
-			die( qq[make[$(MAKELEVEL)]: coverage: FATAL: no *.gcov files found and no c files found\n]) if ( 0 == scalar @f ); \
+			die( qq[checkcov[$(MAKELEVEL)]: coverage: FATAL: no *.gcov files found and no c files found\n]) if ( 0 == scalar @f ); \
 			foreach $$f ( @f ) { \
-				open ( IN, q[<], $$f ) || die qq[make[$(MAKELEVEL)]: coverage: ERROR: cannot open c file: $$f]; \
+				open ( IN, q[<], $$f ) || die qq[checkcov[$(MAKELEVEL)]: coverage: ERROR: cannot open c file: $$f]; \
 				sysread ( IN, $$fb, 9_999_999 ); \
 				close ( IN ) ; \
-				die( qq[make[$(MAKELEVEL)]: coverage: FATAL: no *.gcov files found but found coverage exclusion in c file: $$f\n]) if ( $fb =~ m~COVERAGE\s+EXCLUSION~i ); \
+				die( qq[checkcov[$(MAKELEVEL)]: coverage: FATAL: no *.gcov files found but found coverage exclusion in c file: $$f\n]) if ( $fb =~ m~COVERAGE\s+EXCLUSION~i ); \
 			} \
 		} \
 		undef $$total_lines_covered; \
@@ -269,12 +309,12 @@ $(PERL) -e $(OSQUOTE) \
 		open ( SUM, qq[>] . $$summary_file ); \
 		for $$g ( @g ) { \
 			next if $$g =~ /debug/; \
-			printf qq[make[$(MAKELEVEL)]: coverage: processing: $(OSPC)s\n], $$g if ( $(MAKE_DEBUG) ); \
-			open ( IN, q[<], $$g ) || die qq[make[$(MAKELEVEL)]: coverage: ERROR: cannot open gcov file: $$g]; \
+			printf qq[checkcov[$(MAKELEVEL)]: coverage: processing: $(OSPC)s\n], $$g if ( $(MAKE_DEBUG) ); \
+			open ( IN, q[<], $$g ) || die qq[checkcov[$(MAKELEVEL)]: coverage: ERROR: cannot open gcov file: $$g]; \
 			sysread ( IN, $$f, 9_999_999 ); \
 			close ( IN ) ; \
 			if ( $$f =~ m~(/\* FILE COVERAGE EXCLUSION.*?\*/)~is ) { \
-				printf qq[make[$(MAKELEVEL)]: coverage: excluding: $(OSPC)s\n], $$g if ( $(MAKE_DEBUG) ); \
+				printf qq[checkcov[$(MAKELEVEL)]: coverage: excluding: $(OSPC)s\n], $$g if ( $(MAKE_DEBUG) ); \
 				push @x, sprintf q{$(OSPC)s: $(OSPC)s}, $$g, uc $$1; \
 				next; \
 			} \
@@ -287,7 +327,7 @@ $(PERL) -e $(OSQUOTE) \
 			undef $$these_lines_excluded; \
 			$$f =~ s~^[\r\n]+~~s; \
 			foreach $$block ( split(m~\n{2,}~s,$$f) ) { \
-				printf qq[make[$(MAKELEVEL)]: coverage: line:\n$(OSPC)s\n], $$block if ( $(MAKE_DEBUG) ); \
+				printf qq[checkcov[$(MAKELEVEL)]: coverage: line:\n$(OSPC)s\n], $$block if ( $(MAKE_DEBUG) ); \
 				$$c_file = sprintf q{$(OSPC)s:$(OSPC)d}, $$g, $$block =~ m~:\s*(\d+)~; \
 				if ( $$block =~ m~(/\* COVERAGE EXCLUSION.*?\*/)~is ) { \
 					push @x, sprintf q{make[$(MAKELEVEL)]: coverage: $(OSPC)s: lines: $(OSPC)s}, $$c_file, uc $$1; \
@@ -312,7 +352,7 @@ $(PERL) -e $(OSQUOTE) \
 				     $$total_lines_excluded   += $$these_lines_excluded; \
 				     $$total_lines_tolerated  += $$these_lines_tolerated; \
 				     $$r                       =  0 if ( $$these_lines_tolerated >= $$these_lines_covered_not ); \
-				printf qq[make[$(MAKELEVEL)]: coverage: tolerance: $(OSPC)s=$(OSPC)d\n], $$file_as_env, $$these_lines_tolerated if ( $(MAKE_DEBUG) ); \
+				printf qq[checkcov[$(MAKELEVEL)]: coverage: tolerance: $(OSPC)s=$(OSPC)d\n], $$file_as_env, $$these_lines_tolerated if ( $(MAKE_DEBUG) ); \
 				push @make_tolerate_uncovered_lines, sprintf qq[MAKE_TOLERATE_UNCOVERED_LINES += $(OSPC)s=$(OSPC)d], $$file_as_env, $$these_lines_covered_not; \
 				$$sum = sprintf qq{make[$(MAKELEVEL)]: coverage: Coverage is $(OSPC)s ($(OSPC)5.1f$(OSPC)$(OSPC); lines: $(OSPC)4d excluded, $(OSPC)4d covered, $(OSPC)4d not covered, $(OSPC)4d tolerated) for $$g\n}, $$r ? q{INADEQUATE} : q{acceptable}, 100 - $$these_lines_covered_not / $$lines_total_to_divide * 100, , $$these_lines_excluded, $$these_lines_covered, $$these_lines_covered_not, $$these_lines_tolerated; \
 				$$o .= $$sum; \

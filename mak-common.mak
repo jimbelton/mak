@@ -239,13 +239,14 @@ DST.exe       = $(foreach EXECUTABLE,$(EXECUTABLES),$(DST.dir)/$(EXECUTABLE)$(EX
 DST.c.oks     = $(patsubst %.c,$(DST.dir)/%.ok,$(notdir   $(wildcard test/test-*.c)))
 DST.cpp.oks   = $(patsubst %.cpp,$(DST.dir)/%.ok,$(notdir $(wildcard test/test-*.cpp)))
 DST.pl.oks    = $(patsubst %.pl,$(DST.dir)/%.ok,$(notdir  $(wildcard test/test-*.pl)))
+DST.py.oks    = $(patsubst %.py,$(DST.dir)/%.ok,$(notdir  $(wildcard test/test-*.py)))
 DST.add.oks   = $(DST_TESTS:%=$(DST.dir)/test-%.ok)
 DST.rm.oks    = $(if $(MAKE_RUN_LEGACY_TESTS),,$(LEGACY_TEST_LIST:%=$(DST.dir)/test-%.ok))
 ifndef MAKE_RUN_STRESS_TESTS
-DST.stress.oks= $(filter $(DST.dir)/test-stress-%.ok,$(DST.c.oks) $(DST.cpp.oks) $(DST.pl.oks))
+DST.stress.oks= $(filter $(DST.dir)/test-stress-%.ok,$(DST.c.oks) $(DST.cpp.oks) $(DST.pl.oks) $(DST.py.oks))
 DST.stress.skp= $(if $(DST.stress.oks), (skipped: $(DST.stress.oks:$(DST.dir)/test-%.ok=%)),)
 endif
-DST.oks       = $(filter-out $(DST.rm.oks) $(DST.stress.oks),$(DST.c.oks) $(DST.cpp.oks) $(DST.pl.oks) $(DST.add.oks))
+DST.oks       = $(filter-out $(DST.rm.oks) $(DST.stress.oks),$(DST.c.oks) $(DST.cpp.oks) $(DST.pl.oks) $(DST.py.oks) $(DST.add.oks))
 DST.obj      ?= $(SRC.c:%.c=$(DST.dir)/%$(EXT.obj)) $(SRC.cpp:%.cpp=$(DST.dir)/%$(EXT.obj)) $(DST_OBJ:%=$(DST.dir)/%$(EXT.obj))
 # look for other libraries in: libname/[release/debug]/libname$(EXT.lib)
 
@@ -264,6 +265,7 @@ endif
 ALL_TEST.srcs    := $(wildcard test/*.c) $(wildcard test/*.cpp)
 ACTUAL_TEST.srcs := $(wildcard test/test-*.c) $(wildcard test/test-*.cpp)
 PERL_TEST.srcs   := $(wildcard test/test-*.pl)
+PYTHON_TEST.srcs := $(wildcard test/test-*.py)
 COMMON_TEST.srcs := $(filter-out $(ACTUAL_TEST.srcs),$(ALL_TEST.srcs))
 COMMON_TEST.objs := $(patsubst %,$(DST.dir)/%$(EXT.obj),$(basename $(COMMON_TEST.srcs)))
 
@@ -356,7 +358,7 @@ endif
 include $(TOP.dir)/mak/mak-common-shell.mak
 
 # Dependency on DST.exe was made conditional on MAKE_PEER_DEPENDENCIES; this broke things; reverted; TBD: why was this done?
-release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(INCLUDES) $(DST.lib) $(DST.dll) $(DST.exe)
+release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(INCLUDES) $(DST.lib) $(DST.dll) $(DST.exe) $(BLD.pkg) $(BLD.pkg.dev)
 ifneq ($(DST.inc),)
     # come here if need to collect all include files for high level library; recurse for make wildcards
 	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) DST.dir=$(DST.dir) include
@@ -398,12 +400,11 @@ else
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: ran:      $(DST.dir): tests complete$(DST.stress.skp) (skipped: $(LEGACY_TEST_LIST))"
 endif
 ifdef DO_COVERAGE
-ifneq ($(strip $(DST.oks)),)
+
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: coverage: check"
 	$(MAKE_RUN) $(COVERAGE_CHECK)
 	$(MAKE_RUN) $(DEL) $(DST.dir)$(DIR_SEP)*.c
 	$(MAKE_RUN) $(DEL) $(DST.dir)$(DIR_SEP)*.cpp
-endif
 endif
 endif
 
@@ -506,6 +507,13 @@ $(DST.dir)/%.ok:		./test/%.pl $(DST.exe)  $(DST.lib)  $(DST.dll)
 	$(MAKE_RUN)             cd $(call OSPATH,$(DST.dir)) && $(PERL) ../test/$(call OSPATH,$(notdir $<))             >>                          $(notdir $<).out  2>&1 $(TEST_OUT_ON_ERROR)
 	@$(TOUCH) $@
 
+# Execute the python tests directly (assumes a value '#!' line in each test)
+$(DST.dir)/%.ok:		./test/%.py $(DST.exe)  $(DST.lib)  $(DST.dll)
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: running:  $^"
+	@echo       $(ECHOQUOTE)cd $(call OSPATH,$(DST.dir)) && ../test/$(call OSPATH,$(notdir $<))$(ECHOQUOTE) >  $(call OSPATH,$(DST.dir)/$(notdir $<).out) 2>&1
+	$(MAKE_RUN)             cd $(call OSPATH,$(DST.dir)) && ../test/$(call OSPATH,$(notdir $<))             >>                          $(notdir $<).out  2>&1 $(TEST_OUT_ON_ERROR)
+	@$(TOUCH) $@
+
 # Third party wrapper makefiles must define their own rules.
 #
 ifndef THIRD_PARTY.dir
@@ -515,10 +523,56 @@ $(DST.lib) : $(DST.obj) $(SRC.lib)
 	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)) $(TO_NUL) $(FAKE_PASS)
 	$(MAKE_RUN) $(LIB_CMD) $(LIB_FLAGS) $(LIB_OUT)$@ $(DST.obj) $(call OSPATH,$(SRC.lib))
 
-$(DST.dll) : $(DST.obj) $(SRC.lib)
-	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
-	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)) $(TO_NUL) $(FAKE_PASS)
-	$(MAKE_RUN) $(DLL_CMD) $(DLL_FLAGS) $(DLL_OUT)$@ $(DST.obj) $(call OSPATH,$(SRC.lib))
+BLD.dir     = $(DST.dir)/target
+BLD.dir.dev = $(DST.dir)/target-dev
+
+$(DST.dll) : $(DST.obj) $(DST.lib) $(DEP.libs) $(if $(MAKE_DEBS), $(BLD.dir)/debian/changelog.tmp,)
+	$(MAKE_RUN)$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	$(MAKE_RUN)$(MKDIR)   $(call OSPATH,$(DST.dir)) $(TO_NUL) $(FAKE_PASS)
+ifdef MAKE_DEBS
+	$(MAKE_RUN)$(DLL_CMD) $(DLL_FLAGS) $(DLL_SONAME)$(@F).$(BLD.ver.maj) $(DLL_OUT)$@.$(BLD.ver) $(DST.obj) $(call OSPATH,$(SRC.lib))
+else
+	$(MAKE_RUN)$(DLL_CMD) $(DLL_FLAGS) $(DLL_SONAME)$@ $(DLL_OUT)$@ $(DST.obj) $(call OSPATH,$(SRC.lib))
+endif
+
+ifdef MAKE_DEBS
+DEB_FILES= $(wildcard debian/*)
+ifneq ($(DEB_FILES),)
+
+$(BLD.dir.dev):
+	$(MAKE_RUN)$(MKDIR) $@
+
+$(BLD.dir):
+	$(MAKE_RUN)$(MKDIR) $@
+
+$(BLD.dir)/debian/changelog.tmp: debian/changelog
+	$(MAKE_RUN)$(eval BLD.ver := $(shell dpkg-parsechangelog -l debian/changelog -S version))
+	$(MAKE_RUN)$(eval BLD.ver.maj := $(firstword $(subst ., ,$(BLD.ver))))
+	$(MAKE_RUN)$(MKDIR) $(@D)
+	$(MAKE_RUN)$(COPY) $< $@
+
+$(filter-out $(BLD.dir)/debian/changelog.tmp, $(DEB_FILES:%=$(BLD.dir)/%.tmp)): $(DEB_FILES) $(BLD.dir)
+	$(MAKE_RUN)$(MKDIR) $(@D)
+	$(MAKE_RUN)$(COPY) $(@:$(BLD.dir)/%.tmp=%) $@
+
+$(DEB_FILES:%=$(BLD.dir)/%) : $(DEB_FILES:%=$(BLD.dir)/%.tmp)
+	$(MAKE_RUN)$(PSED_I) $(@:%=%.tmp) 's/<VERSION>/$(BLD.ver)/g'
+	$(MAKE_RUN)$(PSED_I) $(@:%=%.tmp) 's/<VERSION_MAJOR>/$(BLD.ver.maj)/g'
+	$(MAKE_RUN)$(COPY) $(@:%=%.tmp) $@
+	$(MAKE_RUN)$(DEL) $(@:%=%.tmp)
+
+$(BLD.pkg) : $(DST.dll) $(DEB_FILES:%=$(BLD.dir)/%) $(DEP.libs)
+	$(MAKE_RUN)$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building deb: $@"
+	$(MAKE_RUN)$(MKDIR) $(BLD.dir)/usr/lib/
+	$(MAKE_RUN)$(COPYFILES2DIR) $(DST.dll).$(BLD.ver) $(BLD.dir)/usr/lib/
+	$(MAKE_RUN)$(COPYFILES2DIR) $(DST.lib) $(BLD.dir)/usr/lib/
+	$(MAKE_RUN)$(MKDIR) $(BLD.dir)/usr/include
+	$(MAKE_RUN)$(COPYFILES2DIR) $(SRC.inc) $(BLD.dir)/usr/include
+	$(MAKE_RUN)$(COPYFILES2DIR) $(foreach d, $(dir $(DEP.libs)), $(wildcard $(d)/*-proto.h)) $(BLD.dir)/usr/include
+	$(MAKE_RUN)$(MAKE_RUN)$(call DPKG_BUILDPKG, $(BLD.dir))
+	$(MAKE_RUN)$(TOUCH) $@
+endif
+endif
 
 # dump lib contents hint:
 # winnt: lib.exe /list foo.lib

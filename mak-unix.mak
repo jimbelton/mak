@@ -186,6 +186,7 @@ LIB_LIST_FILTER    = cat
 LIB_INDEX          = ranlib
 DLL_CMD            = $(MAKE_PERL_DLL)
 DLL_OUT            =
+DLL_SONAME         =
 DLL_FLAGS          =
 
 # syntax engine workaround ' (a.k.a. VIM)
@@ -287,3 +288,25 @@ OSPATH             = $(1)
 # Function to copy one or more files to a directory
 #   - e.g. $(call COPY_TO_DIR,$source_files,$dest_dir)
 COPY_TO_DIR        = cp -f $(1) $(2)
+DPKG_BUILDPKG      = cd $(1); dpkg-buildpackage -b -rfakeroot -us -uc
+
+define PSED_I
+$(PERL) -e $(OSQUOTE) \
+	exit psed_i_sub ( @ARGV ); \
+	$(PSED_SUBS) \
+	$(OSQUOTE)
+endef
+
+define PSED
+$(PERL) -e $(OSQUOTE) \
+	exit psed_sub ( @ARGV ); \
+	$(PSED_SUBS) \
+	$(OSQUOTE)
+endef
+
+define PSEDFILES2DIR
+$(PERL) -e $(OSQUOTE) \
+	exit psedfiles2dir_sub ( @ARGV ); \
+	$(PSED_SUBS) \
+	$(OSQUOTE)
+endef

@@ -26,28 +26,40 @@ use strict;
 use warnings;
 use English;
 
-my $test_pattern = "build-linux-32-debug/*.t";
-
-if ($OSNAME eq "MSWin32") {
-    $test_pattern = "build-winnt-64-debug\\*.t";
-}
-
 rename("pound.log", "pound.log.bak");
 
-if (system("make debug test >> pound.log 2>&1") != 0) {
-    die("It's a one-hit wonder!\n");
+my $build_type = exists $ENV{POUND_BUILD_TYPE} ? $ENV{POUND_BUILD_TYPE} : 'debug';
+
+warn "Build type is '$build_type' (n.b. change using e.g. set POUND_BUILD_TYPE=release)\n";
+
+my @tests;
+
+$ENV{POUND_JFDI} or do {
+    warn "Running 'make $build_type test > pound.log 2>&1' (n.b. set POUND_JFDI to skip this step!)\n";
+    system("make $build_type test > pound.log 2>&1") == 0 or die("It's a one-hit wonder!\n");
+    warn "Finished; now pounding to pound.log...\n";
+};
+
+if (scalar(@ARGV) > 0) {
+    @tests = @ARGV;
 }
+else {
+    my $test_pattern = "build-linux-32-$build_type/*.t";
 
-my @tests = glob($test_pattern);
+    if ($OSNAME eq "MSWin32") {
+        $test_pattern = "build-winnt-64-$build_type\\*.t";
+    }
 
-if (scalar(@tests) == 0) {
-    die("You don't have any test programs matching '$test_pattern'\n");
+    @tests = glob($test_pattern);
+    scalar(@tests) > 0 or die("You don't have any test programs matching '$test_pattern'\n");
 }
 
 while (1) {
     for my $file (@tests) {
-        if (system("$file >> pound.log 2>&1") != 0) {
+        if (system("$file > pound.log 2>&1") != 0) {
             die("Boom!\n");
         }
+
+        print STDERR (".");
     }
 }
