@@ -59,23 +59,33 @@ endef
 
 NON-THIRD-PARTY-FILES := $(shell $(MAKE_PERL_LIST_NON_THIRD_PARTY_FILES))
 
-
 #
 # - Example usage:
 #	- @$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(pl|pm|t)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(no_plan|skip_all))" exit1 $(FILES)
 #	- Where:
 #	  - Argument #1: Regex to filter files to be loaded
-#	  - Argument #2: Regex to split loaded file into parts
-#		- E.g. "(?s-xim:^(.*)$$)" means one part -- the whole file
+#	  - Argument #2: Regex to split loaded file into parts. e.g. "(?s-xim:^(.*)$$)" means one part, the whole file
 #	  - Argument #3: How argument #4 is interpreted (present|missing)
 #	  - Argument #4: Regex to be performed on each part
-#	  - Argument #5: How to exit if argument #3 hits (exit0|exit1)
+#	  - Argument #5: How to exit if argument #4 matches (exit0|exit1)
 #	  - Argument #6+: File names to grep
-#
+#		- Option -c:         Ignore comments. All comments are removed before splitting (/*..*/ and //..\n)
+#		- Option -i <regex>: Pattern to ignore. All matching parts are ignored. May be specified more than once.
+#		- Option -s:         Ignore string. All strings are removed before splitting
+#	- Note: Sections containing /* COVERAGE EXCLUSION and lines containing // COVERAGE EXCLUSION are ignored
 
 define MAKE_PERL_GREP3_WITHOUT_ARGUMENT
 $(PERL) -e $(OSQUOTE) \
-	$$rs=shift @ARGV; \
+	@ignore_list = (); \
+	$$arg1 = shift @ARGV; \
+	while (substr($$arg1,0,1) eq q[-]) { \
+		if ($$arg1 eq q[-c]) {$$no_comment = 1;} \
+		elsif ($$arg1 eq q[-s]) {$$no_string = 1;} \
+		elsif ($$arg1 eq q[-i]) {push(@ignore_list, shift(@ARGV));} \
+		else {die(qq[Unexpected argument $$arg1]);} \
+		$$arg1=shift @ARGV; \
+	} \
+	$$rs=$$arg1; \
 	$$r1=shift @ARGV; \
 	$$r2_cond=shift @ARGV; \
 	$$r2=shift @ARGV; \
@@ -90,20 +100,25 @@ $(PERL) -e $(OSQUOTE) \
 			printf qq{make: .pl: warning: skipping: file too large to check: $(OSPC)s\n},$$s if $$ENV{MAKE_DEBUG} ; \
 			next; \
 		} \
-		next if($$e1 eq q{exit1} && $$f=~m~[C]ONVENTION EXCLUSION~); \
+		next if($$e1 eq q{exit1} && $$f=~m~/\*\s*[C]ONVENTION EXCLUSION~); \
 		$$f=~s~(\n\r|\n)~\r\n~gis; \
 		if(0){`echo insert file name & line numbers`} \
 		$$n=0; \
 		$$f=~s~^(.*)(?{$$n++})$$~$$s:$$n: $$1~gim; \
 		$$f=~s~\r~~gis; \
+		if ($$no_comment) {$$f=~s~/\*.*?\*/~~gis;} \
 		printf qq{make: .pl: scanning: $(OSPC)4d lines: $(OSPC)s\n},$$n,$$s if $$ENV{MAKE_DEBUG} ; \
 		while($$f=~m~$$r1~g) { \
 			@p=split m~\n~,$$1; \
 			@l=eval qq[grep m~$$r2~,\@p]; \
-			if($$r2_cond=~m~present~i) { \
-				foreach(@l){ \
+			if($$r2_cond =~ m~present~i) { \
+				LINE: foreach $$line (@l){ \
+					if ($$no_string) {$$line =~ s~"[^"]*?[^\\]?"~""~gis; if ($$line !~ m~$$r2~) {next LINE;}} \
+					next LINE if($$line =~ m~//\s*[C]ONVENTION EXCLUSION~); \
+					if ($$no_comment) {$$line =~ s~//.*?$$~~gis; if ($$line !~ m~$$r2~) {next LINE;}} \
+					foreach $$ignore (@ignore_list) {if ($$line =~ m~$$ignore~) {next LINE;}} \
 					$$match_count ++; \
-					printf qq{$(OSPC)s (match #$(OSPC)d)\n},$$_,$$match_count;\
+					printf qq{$(OSPC)s (match #$(OSPC)d)\n},$$line,$$match_count; \
 				} \
 			} elsif($$r2_cond=~m~missing~i) { \
 				if(0 == scalar @l) { \
@@ -139,6 +154,7 @@ endef
 	convention_cuddled_asterisk \
 	convention_no_explicit_true_false_tests \
 	convention_no_fixme \
+	convention_no_glibc_alloc \
 	convention_no_tab \
 	convention_usage \
 	convention
@@ -164,6 +180,7 @@ convention_usage :
 	@echo usage: make convention_no_fixme
 	@echo usage: make convention_no_tab
 	@echo usage: make convention_no_explicit_true_false_tests
+	@echo usage: make convention_no_glibc_alloc
 	@echo usage: make convention_to_do
 	@echo usage: make convention
 
@@ -190,6 +207,7 @@ convention : \
 	convention_cuddled_sizeof \
 	convention_cuddled_asterisk \
 	convention_no_explicit_true_false_tests \
+	convention_no_glibc_alloc \
 	convention_no_fixme \
 	convention_convention_exclusion
 	@echo make: all convention checks passed!
@@ -202,7 +220,7 @@ convention_no_sprintf_in_c_files:
 ifndef MAKE_ALLOW_BASENAME
 convention_no_basename_in_c_files:
 	@$(MAKE_PERL_ECHO) "make: checking convention for basename(3)"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?im-x:[^a-z_-]basename[^_-][^s])" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:[^a-z_-]basename[^_-][^s])" exit1 $(NON-THIRD-PARTY-FILES)
 endif
 
 convention_entry_followed_by_exit:
@@ -285,7 +303,16 @@ convention_no_instrumentation_or_goto_in_lock:
 ifndef MAKE_ALLOW_EXPLICIT_TRUE_FALSE_TESTS
 convention_no_explicit_true_false_tests:
 	@$(MAKE_PERL_ECHO) "make: checking convention for no explicit true/false tests"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?im-x:(\b|\s)[!=]=\s*(true|false)\b)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(\b|\s)[!=]=\s*(true|false)\b)" exit1 $(NON-THIRD-PARTY-FILES)
+endif
+
+ifndef MAKE_ALLOW_GLIBC_ALLOC
+convention_no_glibc_alloc:
+	@$(MAKE_PERL_ECHO) "make: checking convention for no glibc memory allocation functions"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "--" "-c" "-s" "-i" "__attribute__\(\(malloc\)\)" "-i" "\.free" "-i" "->free" \
+		"-i" "\\(\*free\\)" "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present \
+		"(?im-x:\b(?:(?:aligned_|c|m|p?v)alloc|realloc(?:array)?|free|(?:posix_)?memalign|(?:strn?|wcs)dup)\b)" exit1 \
+		$(NON-THIRD-PARTY-FILES)
 endif
 
 convention_to_do:
