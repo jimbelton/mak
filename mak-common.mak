@@ -269,6 +269,8 @@ PYTHON_TEST.srcs := $(wildcard test/test-*.py)
 COMMON_TEST.srcs := $(filter-out $(ACTUAL_TEST.srcs),$(ALL_TEST.srcs))
 COMMON_TEST.objs := $(patsubst %,$(DST.dir)/%$(EXT.obj),$(basename $(COMMON_TEST.srcs)))
 
+ MAK_RECURSIVE_DEFINITIONS=MAK_VERSION=$(MAK_VERSION)    # Definitions passed to recursive make below
+
 # Walk sideways if there is no MAKE_PEER_DEPENDENTS defined
 #
 .PHONY:		$(DEP.dirs)
@@ -276,7 +278,7 @@ COMMON_TEST.objs := $(patsubst %,$(DST.dir)/%$(EXT.obj),$(basename $(COMMON_TEST
 $(DEP.dirs):
 ifndef MAKE_PEER_DEPENDENTS
 	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: checking: $(DST.dir): peer dependent: $@"
-	$(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) -C $@ MAK_VERSION=$(MAK_VERSION) MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
+	$(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) -C $@ $(MAK_RECURSIVE_DEFINITIONS) MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
 endif
 
 ifdef MAKE_DEBUG
