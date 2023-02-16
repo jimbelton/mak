@@ -269,7 +269,7 @@ PYTHON_TEST.srcs := $(wildcard test/test-*.py)
 COMMON_TEST.srcs := $(filter-out $(ACTUAL_TEST.srcs),$(ALL_TEST.srcs))
 COMMON_TEST.objs := $(patsubst %,$(DST.dir)/%$(EXT.obj),$(basename $(COMMON_TEST.srcs)))
 
- MAK_RECURSIVE_DEFINITIONS=MAK_VERSION=$(MAK_VERSION)    # Definitions passed to recursive make below
+MAK_RECURSIVE_DEFINITIONS=MAK_VERSION=$(MAK_VERSION)    # Definitions passed to recursive make below
 
 # Walk sideways if there is no MAKE_PEER_DEPENDENTS defined
 #

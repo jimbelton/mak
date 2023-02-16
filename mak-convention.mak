@@ -303,14 +303,16 @@ convention_no_instrumentation_or_goto_in_lock:
 ifndef MAKE_ALLOW_EXPLICIT_TRUE_FALSE_TESTS
 convention_no_explicit_true_false_tests:
 	@$(MAKE_PERL_ECHO) "make: checking convention for no explicit true/false tests"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(\b|\s)[!=]=\s*(true|false)\b)" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "--" "-c" "-s" "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present \
+		"(?m-ix:(\b|\s)[!=]=\s*(true|false)\b)" exit1 $(NON-THIRD-PARTY-FILES)
 endif
 
 ifndef MAKE_ALLOW_GLIBC_ALLOC
 convention_no_glibc_alloc:
 	@$(MAKE_PERL_ECHO) "make: checking convention for no glibc memory allocation functions"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "--" "-c" "-s" "-i" "__attribute__\(\(malloc\)\)" "-i" "\.free" "-i" "->free" \
-		"-i" "\\(\*free\\)" "\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present \
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "--" "-c" "-s" "-i" "__attribute__\(\(malloc\)\)" "-i" "\.(?:free|(?:c|m|re)alloc)" \
+		"-i" "->(?:free|(?:c|m|re)alloc)" "-i" "unsigned long (?:free|(?:c|m|re)alloc);" "-i" "\\(\*free\\)" "-i" "\) free;" \
+		"\.(c|cpp|h)$$" "(?s-xim:^(.*)$$)" present \
 		"(?im-x:\b(?:(?:aligned_|c|m|p?v)alloc|realloc(?:array)?|free|(?:posix_)?memalign|(?:strn?|wcs)dup)\b)" exit1 \
 		$(NON-THIRD-PARTY-FILES)
 endif
