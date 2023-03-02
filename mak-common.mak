@@ -25,6 +25,17 @@
 #   LIB_DEPENDENCIES       = List of all the package names (removing lib-) of the libraries that the package depends on
 #   CONVENTION_OPTOUT_LIST = List of the packages to opt out of convention checks (e.g: lib-mock lib-port)
 #   COVERAGE_OPTOUT_LIST   = List of the packages to opt out of coverage   checks (e.g: lib-mock lib-port)
+#
+# differences in version 2
+#   Tests default to using libtap installed as in the operating system instead of expecting a libsxe submodule that includes it
+#
+# differences in version 3
+#   SXE_RELEASE_TYPE and SXE_OS_BITS are no longer defined
+#   SXE_RELEASE, SXE_DEBUG, and SXE_COVERAGE are replaced with MAK_RELEASE, MAK_DEBUG, and MAK_COVERAGE
+#   MAK_RELEASE is not defined for coverage builds
+#   SXE_FILE (the component/package/file.name) is replace with MAK_FILE
+#   No longer builds peer dependencies of the directory you run make in
+#   The coverage build directory is build-<OS>-<BITS>-coverage instead of build-<OS>-<BITS>-release-coverage
 
 MAK_VERSION ?= 1
 
@@ -54,32 +65,53 @@ include $(TOP.dir)/mak/mak-common-defines.mak
 #
 .SECONDARY:
 
-CFLAGS   += $(CC_DEF)SXE_OS_BITS=$(OS_bits)
-CXXFLAGS += $(CC_DEF)SXE_OS_BITS=$(OS_bits)
-CFLAGS   += $(CC_DEF)SXE_RELEASE_TYPE=\"$(RELEASE_TYPE)\"
-CXXFLAGS += $(CC_DEF)SXE_RELEASE_TYPE=\"$(RELEASE_TYPE)\"
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
+    CFLAGS   += $(CC_DEF)SXE_OS_BITS=$(OS_bits)
+    CXXFLAGS += $(CC_DEF)SXE_OS_BITS=$(OS_bits)
+    CFLAGS   += $(CC_DEF)SXE_RELEASE_TYPE=\"$(RELEASE_TYPE)\"
+    CXXFLAGS += $(CC_DEF)SXE_RELEASE_TYPE=\"$(RELEASE_TYPE)\"
+endif
 
 ifneq ($(filter release,$(MAKECMDGOALS)),)
     DEBUG    := 0
     COVERAGE := 0
     RELEASE_TYPE := release
     DST.dir  := build-$(OS_name)-$(OS_bits)-$(RELEASE_TYPE)
-    CFLAGS   += $(CC_DEF)SXE_RELEASE=1
-    CXXFLAGS += $(CC_DEF)SXE_RELEASE=1
+    CFLAGS   += $(CC_DEF)MAK_RELEASE=1
+    CXXFLAGS += $(CC_DEF)MAK_RELEASE=1
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
+       CFLAGS   += $(CC_DEF)SXE_RELEASE=1
+       CXXFLAGS += $(CC_DEF)SXE_RELEASE=1
+endif
 else ifneq ($(filter debug,$(MAKECMDGOALS)),)
-    DEBUG    := 1
-    COVERAGE := 0
+    DEBUG        := 1
+    COVERAGE     := 0
     RELEASE_TYPE := debug
-    DST.dir  := build-$(OS_name)-$(OS_bits)-$(RELEASE_TYPE)
-    CFLAGS   += $(CC_DEF)SXE_DEBUG=1 $(CFLAGS_DEBUG)
-    CXXFLAGS += $(CC_DEF)SXE_DEBUG=1 $(CXXFLAGS_DEBUG)
+    DST.dir      := build-$(OS_name)-$(OS_bits)-$(RELEASE_TYPE)
+    CFLAGS       += $(CC_DEF)MAK_DEBUG=1
+    CXXFLAGS     += $(CC_DEF)MAK_DEBUG=1
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
+        CFLAGS   += $(CC_DEF)SXE_DEBUG=1
+        CXXFLAGS += $(CC_DEF)SXE_DEBUG=1
+endif
+    CFLAGS   += $(CFLAGS_DEBUG)
+    CXXFLAGS += $(CXXFLAGS_DEBUG)
 else ifneq ($(filter coverage,$(MAKECMDGOALS)),)
     DEBUG    := 0
     COVERAGE := 1
+ifeq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION > 2
+    RELEASE_TYPE := coverage
+    DST.dir      := build-$(OS_name)-$(OS_bits)-coverage
+else
     RELEASE_TYPE := release-coverage
     DST.dir  := build-$(OS_name)-$(OS_bits)-release-coverage
+endif
+    CFLAGS   += $(CC_DEF)MAK_COVERAGE=1
+    CXXFLAGS += $(CC_DEF)MAK_COVERAGE=1
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
     CFLAGS   += $(CC_DEF)SXE_RELEASE=1 $(CC_DEF)SXE_COVERAGE=1
     CXXFLAGS += $(CC_DEF)SXE_RELEASE=1 $(CC_DEF)SXE_COVERAGE=1
+endif
 endif
 
 ifneq ($(filter release,$(MAKECMDGOALS)),)
@@ -113,16 +145,6 @@ ifdef DST.dir
         COVERAGE_CHECK   := $(MAKE_PERL_COVERAGE_CHECK) $(call OSPATH,$(DST.dir) $(OS_class))
     endif
 
-    # vvv - This code was disabled when building peers - that broke things, so I reverted; TBD: why was this done?
-
-    ifeq ($(filter remote,$(MAKECMDGOALS)),)
-        ifdef MAKE_DEBUG
-            $(info make[$(MAKELEVEL)]: ensure folder exists: $(DST.dir))
-        endif
-
-        DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
-    endif
-
     ifdef THIRD_PARTY.dir
         ifdef MAKE_CACHE_THIRD_PARTY
             # - Experimental build feature:
@@ -141,11 +163,9 @@ ifdef DST.dir
         DUMMY := $(shell $(MKDIR) $(THIRD_PARTY_DST.dir))
         DUMMY := $(shell $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(THIRD_PARTY_DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir)))
         ifdef THIRD_PARTY.del
-           DUMMY := $(shell $(DEL) $(THIRD_PARTY_DST.dir)$(DIR_SEP)$(THIRD_PARTY.dir)$(DIR_SEP)$(THIRD_PARTY.del))
+            DUMMY := $(shell $(DEL) $(THIRD_PARTY_DST.dir)$(DIR_SEP)$(THIRD_PARTY.dir)$(DIR_SEP)$(THIRD_PARTY.del))
         endif
     endif
-
-    # ^^^ - This code was disabled when building peers - that broke things, so I reverted; TBD: why was this done?
 else
     ifneq ($(filter test,$(MAKECMDGOALS)),)
         $(error make[$(MAKELEVEL)]: error: do not specify test goal without release, debug or coverage goals)
@@ -156,13 +176,14 @@ else
 endif
 
 ifneq ($(filter test,$(MAKECMDGOALS)),)
-	DST.d            += $(patsubst %,$(DST.dir)/%,$(subst .c,.d,$(wildcard test/*.c)))
-	DST.d            += $(patsubst %,$(DST.dir)/%,$(subst .cpp,.d,$(wildcard test/*.cpp)))
+    DST.d += $(patsubst %,$(DST.dir)/%,$(subst .c,.d,$(wildcard test/*.c)))
+    DST.d += $(patsubst %,$(DST.dir)/%,$(subst .cpp,.d,$(wildcard test/*.cpp)))
 endif
 
 ifdef MAKE_DEBUG
 $(info make[$(MAKELEVEL)]: debug: include $(TOP.dir)/mak/mak-common-usage.mak)
 endif
+
 include $(TOP.dir)/mak/mak-common-usage.mak
 
 all : usage
@@ -176,45 +197,41 @@ include $(TOP.dir)/mak/mak-convention.mak
 
 # Function to reverse a list
 #
-reverse  = $(if $(1),$(call reverse,$(wordlist  2,$(words $(1)),$(1)))) $(firstword $(1))
-
-#CFLAGS   +=-DEV_MULTIPLICITY=0 # Do we need this?
+reverse = $(if $(1),$(call reverse,$(wordlist  2,$(words $(1)),$(1)))) $(firstword $(1))
 
 DEP.lib_pkgs := $(notdir $(wildcard $(foreach PACKAGE, $(LIBRARIES)   $(LIB_DEPENDENCIES), $(COM.dir)/lib-$(PACKAGE))))
 DEP.dll_pkgs := $(notdir $(wildcard $(foreach PACKAGE, $(DLLIBRARIES) $(DLL_DEPENDENCIES), $(COM.dir)/lib-$(PACKAGE))))
 ifeq ($(COM.dir),.)
-DEP.exe_pkgs := $(notdir $(wildcard $(foreach PACKAGE,              $(EXE_DEPENDENCIES), $(COM.dir)/exe-$(PACKAGE))))
+DEP.exe_pkgs := $(notdir $(wildcard $(foreach PACKAGE,                $(EXE_DEPENDENCIES), $(COM.dir)/exe-$(PACKAGE))))
 endif
 
 DEP.includes := $(foreach PACKAGE, $(DEP.lib_pkgs) $(DEP.dll_pkgs), $(COM.dir)/$(PACKAGE))
 
 # root of all components
 ROOT_ABS_PATH = $(realpath $(COM.dir)/..)
-
 # absolute path to the component directory
 COMPONENT_ABS_PATH = $(realpath $(COM.dir))
 
-# component name, derived from its path (e.g. libsxe)
-SXE_LOG_COMPONENT_NAME_DEFAULT = $(subst $(ROOT_ABS_PATH)/,,$(COMPONENT_ABS_PATH))
+# component name, derived from its path (e.g. libkit)
+MAK_LOG_COMPONENT_NAME ?= $(subst $(ROOT_ABS_PATH)/,,$(COMPONENT_ABS_PATH))
+# "package" name, derived from its path (e.g. lib-kit)
+MAK_LOG_PACKAGE_NAME ?= $(subst $(COMPONENT_ABS_PATH)/,,$(realpath .))
 
-# "package" name, derived from its path (e.g. lib-sxe-http)
-SXE_LOG_PACKAGE_NAME_DEFAULT = $(subst $(COMPONENT_ABS_PATH)/,,$(realpath .))
-
-# developers can override either of these
-ifeq ($(SXE_LOG_COMPONENT_NAME),)
-	SXE_LOG_COMPONENT_NAME=$(SXE_LOG_COMPONENT_NAME_DEFAULT)
-endif
-ifeq ($(SXE_LOG_PACKAGE_NAME),)
-	SXE_LOG_PACKAGE_NAME=$(SXE_LOG_PACKAGE_NAME_DEFAULT)
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
+    # component name, derived from its path (e.g. libsxe)
+    SXE_LOG_COMPONENT_NAME ?= $(subst $(ROOT_ABS_PATH)/,,$(COMPONENT_ABS_PATH))
+    # "package" name, derived from its path (e.g. lib-sxe-http)
+    SXE_LOG_PACKAGE_NAME ?= $(subst $(COMPONENT_ABS_PATH)/,,$(realpath .))
 endif
 
-DEP.includes := $(foreach PACKAGE, $(DEP.lib_pkgs) $(DEP.dll_pkgs), $(COM.dir)/$(PACKAGE))
+LIB_INC      ?= .    # Can be overridden with the library's /usr/include subdirectory (e.g. kit for libkit)
+DEP.includes := $(foreach PACKAGE, $(DEP.lib_pkgs) $(DEP.dll_pkgs), $(COM.dir)/$(PACKAGE)/$(LIB_INC))
 
 TOP.path        = $(realpath $(TOP.dir))/
 # CUR.dir is the path to the current directory with the path to the top of the project removed, leaving e.g. "libsxe/lib-sxe"
 CUR.dir         = $(subst $(TOP.path),,$(realpath .))
-IFLAGS          = $(CC_INC). $(CC_INC)$(OS_class) $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)) \
-                   $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)/$(DST.dir))
+IFLAGS          = $(CC_INC)$(LIB_INC) $(CC_INC)$(OS_class) $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)) \
+                  $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)/$(DST.dir)/$(LIB_DIR))
 IFLAGS_TEST     = $(CC_INC)./test
 LINK_FLAGS_TEST = $(LINK_FLAGS)
 
@@ -225,8 +242,14 @@ else
     LINK_FLAGS_TEST += $(LINK_TEST_LIB)
 endif
 
-CFLAGS       += -DSXE_FILE=\"$(SXE_LOG_COMPONENT_NAME)/$(SXE_LOG_PACKAGE_NAME)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir) $(CFLAGS_EXTRA)
-CXXFLAGS     += -DSXE_FILE=\"$(SXE_LOG_COMPONENT_NAME)/$(SXE_LOG_PACKAGE_NAME)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir) $(CFLAGS_EXTRA)
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
+    CFLAGS   += -DSXE_FILE=\"$(SXE_LOG_COMPONENT_NAME)/$(SXE_LOG_PACKAGE_NAME)/$<\"
+    CXXFLAGS += -DSXE_FILE=\"$(SXE_LOG_COMPONENT_NAME)/$(SXE_LOG_PACKAGE_NAME)/$<\"
+endif
+
+CFLAGS       += -DMAK_FILE=\"$(MAK_LOG_COMPONENT_NAME)/$(MAK_LOG_PACKAGE_NAME)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir)$(LIB_INC) $(CFLAGS_EXTRA)
+CXXFLAGS     += -DMAK_FILE=\"$(MAK_LOG_COMPONENT_NAME)/$(MAK_LOG_PACKAGE_NAME)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir)$(LIB_INC) $(CFLAGS_EXTRA)
+
 CFLAGS_TEST  += $(IFLAGS_TEST)
 CXXFLAGS_TEST+= $(IFLAGS_TEST)
 SRC.c        := $(wildcard *.c)   $(subst $(OS_class)/,,$(wildcard $(OS_class)/*.c))
@@ -271,6 +294,7 @@ COMMON_TEST.objs := $(patsubst %,$(DST.dir)/%$(EXT.obj),$(basename $(COMMON_TEST
 
 MAK_RECURSIVE_DEFINITIONS=MAK_VERSION=$(MAK_VERSION)    # Definitions passed to recursive make below
 
+ifneq ($(findstring $(strip $(MAK_VERSION)),1 2),)    # if MAK_VERSION <= 2
 # Walk sideways if there is no MAKE_PEER_DEPENDENTS defined
 #
 .PHONY:		$(DEP.dirs)
@@ -280,6 +304,16 @@ ifndef MAKE_PEER_DEPENDENTS
 	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: checking: $(DST.dir): peer dependent: $@"
 	$(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) -C $@ $(MAK_RECURSIVE_DEFINITIONS) MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
 endif
+else    # MAK_VERSION >= 3
+ifeq ($(COM.dir),.)
+.PHONY:		$(DEP.dirs)
+
+$(DEP.dirs):
+	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: recusively making package: $@"
+	$(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) -C $@ $(MAK_RECURSIVE_DEFINITIONS) MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
+endif
+endif
+
 
 ifdef MAKE_DEBUG
 $(info make[$(MAKELEVEL)]: debug: MAKECMDGOALS...........: $(MAKECMDGOALS))
